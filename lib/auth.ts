@@ -1,0 +1,34 @@
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { ensureUser } from "@/lib/users";
+
+export async function requireAppUser() {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  const user = await currentUser();
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  const email = user.primaryEmailAddress?.emailAddress ?? `${userId}@chessheaven.local`;
+  const username =
+    user.username ?? ([user.firstName, user.lastName].filter(Boolean).join(" ") || email.split("@")[0] || "Player");
+  const imageUrl = user.imageUrl;
+
+  const appUser = await ensureUser({
+    clerkId: userId,
+    email,
+    username,
+    imageUrl
+  });
+
+  if (!appUser) {
+    throw new Error("Unable to provision user");
+  }
+
+  return appUser;
+}

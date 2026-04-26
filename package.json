@@ -1,0 +1,29 @@
+{
+  "name": "chess-heaven",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.18.2",
+    "chess.js": "^1.4.0",
+    "clsx": "^2.1.1",
+    "mongodb": "^6.16.0",
+    "next": "^15.3.1",
+    "react": "^19.1.0",
+    "react-chessboard": "^5.7.2",
+    "react-dom": "^19.1.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "typescript": "^5.8.3"
+  }
+}
