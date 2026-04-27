@@ -46,7 +46,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.className = `theme-${theme}`;
+    document.documentElement.classList.forEach((className) => {
+      if (className.startsWith("theme-")) {
+        document.documentElement.classList.remove(className);
+      }
+    });
+    document.documentElement.classList.add(`theme-${theme}`);
     window.localStorage.setItem("chess-heaven-app-theme", theme);
   }, [theme]);
 

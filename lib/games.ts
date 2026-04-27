@@ -28,6 +28,24 @@ function getActiveClock(game: GameDocument, nowMs: number) {
   return next;
 }
 
+function hasTimedOut(game: GameDocument, nowMs: number) {
+  if (game.status !== "live" || !game.lastMoveAt) {
+    return null;
+  }
+
+  const elapsed = Math.max(0, nowMs - new Date(game.lastMoveAt).getTime());
+  const remaining =
+    game.activeColor === "white"
+      ? game.clocks.whiteMs - elapsed
+      : game.clocks.blackMs - elapsed;
+
+  if (remaining > 0) {
+    return null;
+  }
+
+  return game.activeColor;
+}
+
 async function attachPlayers(game: GameDocument, viewerId: string): Promise<GameView> {
   const db = await getDb();
   const ids = [game.whitePlayerId, game.blackPlayerId].filter(Boolean) as string[];
@@ -75,11 +93,17 @@ async function attachPlayers(game: GameDocument, viewerId: string): Promise<Game
 async function finalizeGame(game: GameDocument, result: GameDocument["result"], resultReason: string) {
   const db = await getDb();
   const now = new Date().toISOString();
+  
+  const clocks = { ...game.clocks };
+  if (result === "white" && resultReason.includes("flagged")) clocks.blackMs = 0;
+  if (result === "black" && resultReason.includes("flagged")) clocks.whiteMs = 0;
+
   const finished = {
     ...game,
     status: "finished" as const,
     result,
     resultReason,
+    clocks,
     lastMoveAt: null,
     updatedAt: now
   };
@@ -100,21 +124,16 @@ async function finalizeGame(game: GameDocument, result: GameDocument["result"], 
 }
 
 async function syncTimeoutIfNeeded(game: GameDocument) {
+  const loser = hasTimedOut(game, Date.now());
+
+  if (!loser) {
+    return game;
+  }
+
   const live = getActiveClock(game, Date.now());
-
-  if (live.status !== "live") {
-    return live;
-  }
-
-  if (live.clocks.whiteMs === 0) {
-    return finalizeGame(live, "black", "White flagged");
-  }
-
-  if (live.clocks.blackMs === 0) {
-    return finalizeGame(live, "white", "Black flagged");
-  }
-
-  return live;
+  return loser === "white"
+    ? finalizeGame(live, "black", "White flagged")
+    : finalizeGame(live, "white", "Black flagged");
 }
 
 export async function createGame(input: {

@@ -1,7 +1,20 @@
+import { clsx, type ClassValue } from "clsx";
+
+export function cn(...inputs: ClassValue[]) {
+  return clsx(inputs);
+}
+
 export function formatClock(ms: number) {
-  const safe = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe % 60;
+  const safe = Math.max(0, ms);
+  const totalSeconds = Math.floor(safe / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (totalSeconds < 10) {
+    const tenths = Math.floor((safe % 1000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths}`;
+  }
+
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 

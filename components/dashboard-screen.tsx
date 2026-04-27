@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import type { AppUser, GameView } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { ThemeSettings } from "./theme-settings";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 
 export function DashboardScreen({ user, games: initialGames }: Props) {
   const router = useRouter();
-  const [games, setGames] = useState(initialGames);
+  const [games] = useState(initialGames);
   const [creatorSide, setCreatorSide] = useState<"white" | "black" | "random">("random");
   const [whiteMinutes, setWhiteMinutes] = useState(10);
   const [blackMinutes, setBlackMinutes] = useState(10);
@@ -24,14 +24,6 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const waitingCount = useMemo(() => games.filter((game) => game.status === "waiting").length, [games]);
-
-  async function refreshGames() {
-    const response = await fetch("/api/games");
-    const data = await response.json();
-    if (response.ok) {
-      setGames(data.games);
-    }
-  }
 
   async function handleCreateGame(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,12 +38,10 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
 
     const data = await response.json();
     setBusy(false);
-
     if (!response.ok) {
       setError(data.error ?? "Unable to create game");
       return;
     }
-
     router.push(`/play/${data.code}`);
   }
 
@@ -64,133 +54,106 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
     const response = await fetch(`/api/games/${code}/join`, { method: "POST" });
     const data = await response.json();
     setBusy(false);
-
     if (!response.ok) {
       setError(data.error ?? "Unable to join game");
       return;
     }
-
-    setJoinCode("");
     router.push(`/play/${code}`);
   }
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+    <div className="dashboard-layout">
+      <div className="dashboard-top-row">
+        <div className="card stat-card">
+          <p className="eyebrow">Profile</p>
+          <div className="profile-info">
+            <img src={user.imageUrl} alt="" className="player-avatar" />
             <div>
-              <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Username</p>
-              <p style={{ fontSize: 24, fontWeight: 600 }}>{user.username}</p>
-            </div>
-            <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
-              <div>
-                <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Elo</p>
-                <p style={{ fontSize: 24, fontWeight: 600, fontFamily: "var(--font-mono)" }}>{user.elo}</p>
-              </div>
-              <div>
-                <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Waiting</p>
-                <p style={{ fontSize: 24, fontWeight: 600 }}>{waitingCount}</p>
+              <h2>{user.username}</h2>
+              <div className="profile-stats">
+                <span>Rating: <strong>{user.elo}</strong></span>
+                <span>Active: <strong>{waitingCount}</strong></span>
               </div>
             </div>
           </div>
         </div>
-
         <ThemeSettings />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-        <form className="card" onSubmit={handleCreateGame} style={{ display: "grid", gap: 16 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Create game</h2>
+      <div className="dashboard-grid">
+        <form className="card form-card" onSubmit={handleCreateGame}>
+          <p className="eyebrow">Create Match</p>
           
-          <label className="label">
-            Your side
-            <select className="select" value={creatorSide} onChange={(e) => setCreatorSide(e.target.value as typeof creatorSide)}>
+          <div className="input-group">
+            <label>Your Side</label>
+            <select className="select" value={creatorSide} onChange={(e) => setCreatorSide(e.target.value as any)}>
               <option value="random">Random</option>
               <option value="white">White</option>
               <option value="black">Black</option>
             </select>
-          </label>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <label className="label">
-              White (min)
-              <input className="input" type="number" min={1} max={180} value={whiteMinutes} onChange={(e) => setWhiteMinutes(Number(e.target.value))} />
-            </label>
-            <label className="label">
-              Black (min)
-              <input className="input" type="number" min={1} max={180} value={blackMinutes} onChange={(e) => setBlackMinutes(Number(e.target.value))} />
-            </label>
           </div>
 
-          <label className="label">
-            Increment (sec)
-            <input className="input" type="number" min={0} max={180} value={incrementSeconds} onChange={(e) => setIncrementSeconds(Number(e.target.value))} />
-          </label>
+          <div className="input-row">
+            <div className="input-group">
+              <label>White (min)</label>
+              <input className="input" type="number" min={1} max={180} value={whiteMinutes} onChange={(e) => setWhiteMinutes(Number(e.target.value))} />
+            </div>
+            <div className="input-group">
+              <label>Black (min)</label>
+              <input className="input" type="number" min={1} max={180} value={blackMinutes} onChange={(e) => setBlackMinutes(Number(e.target.value))} />
+            </div>
+          </div>
 
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? "Creating..." : "Create game"}
+          <div className="input-group">
+            <label>Increment (sec)</label>
+            <input className="input" type="number" min={0} max={60} value={incrementSeconds} onChange={(e) => setIncrementSeconds(Number(e.target.value))} />
+          </div>
+
+          <button className="btn btn-primary full-width" type="submit" disabled={busy}>
+            {busy ? "Creating..." : "Create Game"}
           </button>
         </form>
 
-        <form className="card" onSubmit={handleJoinGame} style={{ display: "grid", gap: 16 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Join game</h2>
-          
-          <label className="label">
-            Invite code
+        <form className="card form-card" onSubmit={handleJoinGame}>
+          <p className="eyebrow">Join Match</p>
+          <div className="input-group">
+            <label>Invite Code</label>
             <input 
-              className="input" 
+              className="input code-input" 
               placeholder="ABCD1234" 
               value={joinCode} 
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.1em" }}
             />
-          </label>
-
-          <button className="btn btn-secondary" type="submit" disabled={busy}>
-            {busy ? "Joining..." : "Join game"}
-          </button>
-          
-          {error && <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p>}
-        </form>
-      </div>
-
-      <div className="card">
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Recent games</h2>
-        
-        {games.length === 0 ? (
-          <p style={{ color: "var(--text-dim)", fontSize: 14 }}>No games yet. Create or join a game to get started.</p>
-        ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {games.map((game) => (
-              <Link 
-                key={game.code} 
-                href={`/play/${game.code}`}
-                style={{ 
-                  display: "grid", 
-                  gap: 8, 
-                  padding: 16, 
-                  background: "var(--bg)", 
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border)"
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600 }}>{game.code}</span>
-                  <span style={{ fontSize: 12, color: game.status === "live" ? "var(--accent)" : "var(--text-dim)" }}>
-                    {game.status}
-                  </span>
-                </div>
-                <p style={{ fontSize: 14 }}>
-                  {game.whitePlayer?.username ?? "Waiting"} vs {game.blackPlayer?.username ?? "Waiting"}
-                </p>
-                <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                  {game.timeControl.whiteMs / 60000}m / {game.timeControl.blackMs / 60000}m · +{game.timeControl.incrementMs / 1000}s · {formatDate(game.updatedAt)}
-                </p>
-              </Link>
-            ))}
           </div>
-        )}
+          <button className="btn btn-secondary full-width" type="submit" disabled={busy}>
+            Join Game
+          </button>
+          {error && <div className="error-toast">{error}</div>}
+        </form>
+
+        <div className="card recent-games-card">
+          <p className="eyebrow">Recent Activity</p>
+          <div className="games-list">
+            {games.length === 0 ? (
+              <p className="empty-text">No games yet</p>
+            ) : (
+              games.map((game) => (
+                <Link key={game.code} href={`/play/${game.code}`} className="game-item">
+                  <div className="game-item-header">
+                    <span className="game-code">{game.code}</span>
+                    <span className={cn("game-status-tag", game.status)}>{game.status}</span>
+                  </div>
+                  <div className="game-players">
+                    {game.whitePlayer?.username ?? "???"} vs {game.blackPlayer?.username ?? "???"}
+                  </div>
+                  <div className="game-meta">
+                    {game.timeControl.whiteMs / 60000}m + {game.timeControl.incrementMs / 1000}s · {formatDate(game.updatedAt)}
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

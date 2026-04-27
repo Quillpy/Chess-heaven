@@ -2,21 +2,33 @@
 
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 export function AppHeader() {
+  const pathname = usePathname();
+
   return (
     <div className="topbar">
       <Link href="/dashboard" className="brand">
-        Chess Heaven
+        Heaven
       </Link>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <Link href="/settings" className="btn btn-secondary" style={{ padding: "8px 14px" }}>
-          Settings
-        </Link>
-        <Link href="/dashboard" className="btn btn-secondary" style={{ padding: "8px 14px" }}>
-          Dashboard
-        </Link>
-        <UserButton />
+      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        <nav className="nav-links">
+          <Link 
+            href="/dashboard" 
+            className={cn(pathname === "/dashboard" && "active")}
+          >
+            Dashboard
+          </Link>
+          <Link 
+            href="/settings" 
+            className={cn(pathname === "/settings" && "active")}
+          >
+            Settings
+          </Link>
+        </nav>
+        <UserButton afterSignOutUrl="/" />
       </div>
     </div>
   );

@@ -3,12 +3,12 @@ import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
 
 export default function HomePage() {
   return (
-    <main className="shell" style={{ paddingBottom: 48 }}>
+    <main className="shell landing-page">
       <div className="topbar">
         <Link href="/" className="brand">
-          Chess Heaven
+          Heaven
         </Link>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="nav-actions">
           <SignedOut>
             <SignInButton mode="modal">
               <button className="btn btn-secondary">Log in</button>
@@ -19,51 +19,54 @@ export default function HomePage() {
           </SignedOut>
           <SignedIn>
             <Link className="btn btn-primary" href="/dashboard">
-              Dashboard
+              Go to Dashboard
             </Link>
           </SignedIn>
         </div>
       </div>
 
-      <section style={{ display: "grid", gap: 24, maxWidth: 640, marginTop: 48 }}>
-        <div>
-          <h1 style={{ fontSize: "clamp(2.5rem, 6vw, 3.5rem)", fontWeight: 700, lineHeight: 1.1, letterSpacing: -0.03 }}>
-            Play chess.<br />
-            <span style={{ color: "var(--accent)" }}>Simply.</span>
+      <div className="hero">
+        <div className="hero-content">
+          <p className="eyebrow accent-color">Competitive Chess</p>
+          <h1 className="hero-title">
+            The purest way to <br />
+            <span>play chess online.</span>
           </h1>
-          <p style={{ fontSize: 16, color: "var(--text-dim)", marginTop: 16, lineHeight: 1.6, maxWidth: 480 }}>
-            Minimal online chess with clean boards, code invites, and a distraction-free interface.
+          <p className="hero-description">
+            A minimal, distraction-free platform for private matches. No bloat. Just the game.
           </p>
+          <div className="hero-actions">
+            <SignedOut>
+              <SignUpButton mode="modal">
+                <button className="btn btn-primary btn-lg">Get Started</button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <Link className="btn btn-primary btn-lg" href="/dashboard">
+                Create a Match
+              </Link>
+            </SignedIn>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <SignedOut>
-            <SignUpButton mode="modal">
-              <button className="btn btn-primary">Start playing</button>
-            </SignUpButton>
-          </SignedOut>
-          <SignedIn>
-            <Link className="btn btn-primary" href="/dashboard">
-              Create game
-            </Link>
-          </SignedIn>
+        <div className="card feature-card">
+          <h2 className="eyebrow" style={{ marginBottom: 20 }}>Key Features</h2>
+          <div className="feature-grid">
+             <div className="feature-item">
+                <strong>Instant Rooms</strong>
+                <span>Create a match and share the link instantly.</span>
+             </div>
+             <div className="feature-item">
+                <strong>Time Odds</strong>
+                <span>Balance matches with custom clocks for each side.</span>
+             </div>
+             <div className="feature-item">
+                <strong>Themes</strong>
+                <span>Personalize your board with curated palettes.</span>
+             </div>
+          </div>
         </div>
-
-        <div className="card" style={{ marginTop: 16 }}>
-          <h2 style={{ fontSize: 16, marginBottom: 16 }}>Features</h2>
-          <ul style={{ listStyle: "none", display: "grid", gap: 12 }}>
-            <li style={{ color: "var(--text-dim)", fontSize: 14 }}>
-              <strong style={{ color: "var(--text)" }}>Private matches</strong> — Share a code to invite anyone
-            </li>
-            <li style={{ color: "var(--text-dim)", fontSize: 14 }}>
-              <strong style={{ color: "var(--text)" }}>Custom boards</strong> — Three clean palettes to choose from
-            </li>
-            <li style={{ color: "var(--text-dim)", fontSize: 14 }}>
-              <strong style={{ color: "var(--text)" }}>Time odds</strong> — Set different clocks for each side
-            </li>
-          </ul>
-        </div>
-      </section>
+      </div>
     </main>
   );
 }

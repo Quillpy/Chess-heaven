@@ -35,7 +35,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ code: stri
             if (intervalId) clearInterval(intervalId);
             controller.close();
           }
-        }, 500);
+        }, 1000);
 
         return () => {
           if (intervalId) clearInterval(intervalId);
