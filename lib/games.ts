@@ -62,6 +62,9 @@ async function attachPlayers(game: GameDocument, viewerId: string): Promise<Game
     clocks: game.clocks,
     activeColor: game.activeColor,
     lastMoveAt: game.lastMoveAt,
+    drawOfferedBy: game.drawOfferedBy,
+    drawAcceptedBy: game.drawAcceptedBy,
+    halfMoveClock: game.halfMoveClock,
     createdAt: game.createdAt,
     updatedAt: game.updatedAt,
     youAre,
@@ -150,6 +153,9 @@ export async function createGame(input: {
     },
     activeColor: "white",
     lastMoveAt: null,
+    drawOfferedBy: null,
+    drawAcceptedBy: null,
+    halfMoveClock: 0,
     createdAt: now,
     updatedAt: now
   };
@@ -183,6 +189,9 @@ export async function joinGame(code: string, playerId: string) {
     blackPlayerId,
     status: "live",
     lastMoveAt: now,
+    drawOfferedBy: null,
+    drawAcceptedBy: null,
+    halfMoveClock: 0,
     updatedAt: now
   };
 
@@ -194,6 +203,9 @@ export async function joinGame(code: string, playerId: string) {
         blackPlayerId,
         status: "live",
         lastMoveAt: now,
+        drawOfferedBy: null,
+        drawAcceptedBy: null,
+        halfMoveClock: 0,
         updatedAt: now
       }
     }
@@ -273,6 +285,10 @@ export async function submitMove(input: {
       ? { whiteMs: whiteMs + synced.timeControl.incrementMs, blackMs }
       : { whiteMs, blackMs: blackMs + synced.timeControl.incrementMs };
 
+  const isCapture = move.flags.includes("c") || move.flags.includes("e");
+  const isPawnMove = move.piece === "p";
+  const newHalfMoveClock = isCapture || isPawnMove ? 0 : synced.halfMoveClock + 1;
+
   let next: GameDocument = {
     ...synced,
     fen: chess.fen(),
@@ -281,6 +297,9 @@ export async function submitMove(input: {
     clocks: moverClockAfterIncrement,
     activeColor: chess.turn() === "w" ? "white" : "black",
     lastMoveAt: now,
+    drawOfferedBy: null,
+    drawAcceptedBy: null,
+    halfMoveClock: newHalfMoveClock,
     updatedAt: now
   };
 
@@ -300,6 +319,14 @@ export async function submitMove(input: {
       resultReason: "Draw",
       lastMoveAt: null
     };
+  } else if (newHalfMoveClock >= 100) {
+    next = {
+      ...next,
+      status: "finished",
+      result: "draw",
+      resultReason: "50-move rule",
+      lastMoveAt: null
+    };
   }
 
   await db.collection<GameDocument>(gamesCollection).updateOne(
@@ -315,12 +342,146 @@ export async function submitMove(input: {
         result: next.result,
         resultReason: next.resultReason,
         lastMoveAt: next.lastMoveAt,
+        drawOfferedBy: next.drawOfferedBy,
+        drawAcceptedBy: next.drawAcceptedBy,
+        halfMoveClock: next.halfMoveClock,
         updatedAt: next.updatedAt
       }
     }
   );
 
   return attachPlayers(next, input.playerId);
+}
+
+export async function offerDraw(input: { code: string; playerId: string }) {
+  const db = await getDb();
+  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+
+  if (!game) {
+    throw new Error("Game not found");
+  }
+
+  const synced = await syncTimeoutIfNeeded(game);
+
+  if (synced.status !== "live") {
+    throw new Error("Game is not live");
+  }
+
+  const playerSide = synced.whitePlayerId === input.playerId ? "white" : synced.blackPlayerId === input.playerId ? "black" : null;
+
+  if (!playerSide) {
+    throw new Error("You are not part of this game");
+  }
+
+  if (synced.drawAcceptedBy) {
+    const now = new Date().toISOString();
+    await db.collection<GameDocument>(gamesCollection).updateOne(
+      { code: input.code },
+      {
+        $set: {
+          status: "finished",
+          result: "draw",
+          resultReason: "Draw accepted",
+          lastMoveAt: null,
+          updatedAt: now
+        }
+      }
+    );
+    return attachPlayers({ ...synced, status: "finished", result: "draw", resultReason: "Draw accepted", lastMoveAt: null, updatedAt: now }, input.playerId);
+  }
+
+  const now = new Date().toISOString();
+  await db.collection<GameDocument>(gamesCollection).updateOne(
+    { code: input.code },
+    {
+      $set: {
+        drawOfferedBy: playerSide,
+        updatedAt: now
+      }
+    }
+  );
+
+  return attachPlayers({ ...synced, drawOfferedBy: playerSide, updatedAt: now }, input.playerId);
+}
+
+export async function acceptDraw(input: { code: string; playerId: string }) {
+  const db = await getDb();
+  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+
+  if (!game) {
+    throw new Error("Game not found");
+  }
+
+  const synced = await syncTimeoutIfNeeded(game);
+
+  if (synced.status !== "live") {
+    throw new Error("Game is not live");
+  }
+
+  const playerSide = synced.whitePlayerId === input.playerId ? "white" : synced.blackPlayerId === input.playerId ? "black" : null;
+
+  if (!playerSide) {
+    throw new Error("You are not part of this game");
+  }
+
+  if (synced.drawOfferedBy === playerSide || !synced.drawOfferedBy) {
+    throw new Error("No draw offer to accept");
+  }
+
+  const now = new Date().toISOString();
+  await db.collection<GameDocument>(gamesCollection).updateOne(
+    { code: input.code },
+    {
+      $set: {
+        status: "finished",
+        result: "draw",
+        resultReason: "Draw accepted",
+        lastMoveAt: null,
+        drawAcceptedBy: playerSide,
+        updatedAt: now
+      }
+    }
+  );
+
+  return attachPlayers({ ...synced, status: "finished", result: "draw", resultReason: "Draw accepted", lastMoveAt: null, drawAcceptedBy: playerSide, updatedAt: now }, input.playerId);
+}
+
+export async function resignGame(input: { code: string; playerId: string }) {
+  const db = await getDb();
+  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+
+  if (!game) {
+    throw new Error("Game not found");
+  }
+
+  const synced = await syncTimeoutIfNeeded(game);
+
+  if (synced.status !== "live") {
+    throw new Error("Game is not live");
+  }
+
+  const playerSide = synced.whitePlayerId === input.playerId ? "white" : synced.blackPlayerId === input.playerId ? "black" : null;
+
+  if (!playerSide) {
+    throw new Error("You are not part of this game");
+  }
+
+  const winner = playerSide === "white" ? "black" : "white";
+  const now = new Date().toISOString();
+  await db.collection<GameDocument>(gamesCollection).updateOne(
+    { code: input.code },
+    {
+      $set: {
+        status: "finished",
+        result: winner,
+        resultReason: "Resignation",
+        lastMoveAt: null,
+        updatedAt: now
+      }
+    }
+  );
+
+  return attachPlayers({ ...synced, status: "finished", result: winner, resultReason: "Resignation", lastMoveAt: null, updatedAt: now }, input.playerId);
 }
 
 export async function listGamesForUser(playerId: string) {

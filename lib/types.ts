@@ -4,7 +4,21 @@ export type GameStatus = "waiting" | "live" | "finished";
 
 export type GameResult = "white" | "black" | "draw" | null;
 
+export type AppThemeName =
+  | "default"
+  | "neon"
+  | "ocean"
+  | "sunset"
+  | "forest"
+  | "midnight"
+  | "crimson"
+  | "sapphire"
+  | "emerald"
+  | "rose"
+  | "amber";
+
 export type BoardTheme = {
+  name: string;
   light: string;
   dark: string;
   accent: string;
@@ -49,6 +63,9 @@ export type GameDocument = {
   };
   activeColor: Side;
   lastMoveAt: string | null;
+  drawOfferedBy: Side | null;
+  drawAcceptedBy: Side | null;
+  halfMoveClock: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -75,6 +92,9 @@ export type GameView = {
   };
   activeColor: Side;
   lastMoveAt: string | null;
+  drawOfferedBy: Side | null;
+  drawAcceptedBy: Side | null;
+  halfMoveClock: number;
   createdAt: string;
   updatedAt: string;
   youAre: Side | null;

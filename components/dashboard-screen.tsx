@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import type { AppUser, GameView } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { ThemeSettings } from "./theme-settings";
 
 type Props = {
   user: AppUser;
@@ -75,23 +76,27 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-          <div>
-            <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Username</p>
-            <p style={{ fontSize: 24, fontWeight: 600 }}>{user.username}</p>
-          </div>
-          <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
             <div>
-              <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Elo</p>
-              <p style={{ fontSize: 24, fontWeight: 600, fontFamily: "var(--font-mono)" }}>{user.elo}</p>
+              <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Username</p>
+              <p style={{ fontSize: 24, fontWeight: 600 }}>{user.username}</p>
             </div>
-            <div>
-              <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Waiting</p>
-              <p style={{ fontSize: 24, fontWeight: 600 }}>{waitingCount}</p>
+            <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
+              <div>
+                <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Elo</p>
+                <p style={{ fontSize: 24, fontWeight: 600, fontFamily: "var(--font-mono)" }}>{user.elo}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Waiting</p>
+                <p style={{ fontSize: 24, fontWeight: 600 }}>{waitingCount}</p>
+              </div>
             </div>
           </div>
         </div>
+
+        <ThemeSettings />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>

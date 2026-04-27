@@ -30,5 +30,14 @@ export async function requireAppUser() {
     throw new Error("Unable to provision user");
   }
 
-  return appUser;
+  return {
+    _id: appUser._id.toString(),
+    clerkId: appUser.clerkId,
+    email: appUser.email,
+    username: appUser.username,
+    imageUrl: appUser.imageUrl,
+    elo: appUser.elo,
+    createdAt: appUser.createdAt,
+    updatedAt: appUser.updatedAt
+  };
 }

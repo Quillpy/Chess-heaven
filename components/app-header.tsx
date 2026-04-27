@@ -10,6 +10,9 @@ export function AppHeader() {
         Chess Heaven
       </Link>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Link href="/settings" className="btn btn-secondary" style={{ padding: "8px 14px" }}>
+          Settings
+        </Link>
         <Link href="/dashboard" className="btn btn-secondary" style={{ padding: "8px 14px" }}>
           Dashboard
         </Link>
