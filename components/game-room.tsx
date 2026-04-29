@@ -2,7 +2,7 @@
 
 import { Chessboard } from "react-chessboard";
 import { Chess, type Square } from "chess.js";
-import { memo, useEffect, useMemo, useState, useCallback } from "react";
+import { memo, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { CSSProperties } from "react";
 import type { GameView } from "@/lib/types";
 import { formatClock, cn } from "@/lib/utils";
@@ -151,6 +151,11 @@ const MoveList = memo(function MoveList({ moves }: { moves: string[] }) {
   );
 });
 
+const playSound = (name: string) => {
+  const audio = new Audio(`/Sounds/${name}.mp3`);
+  audio.play().catch(() => {});
+};
+
 export function GameRoom({ initialGame }: Props) {
   const [game, setGame] = useState(initialGame);
   const [themeIndex, setThemeIndex] = useState(0);
@@ -161,6 +166,41 @@ export function GameRoom({ initialGame }: Props) {
   const [promotionSquare, setPromotionSquare] = useState<Square | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+
+  const [rightClickedSquares, setRightClickedSquares] = useState<Record<string, CSSProperties>>({});
+
+  // Sound Effects
+  useEffect(() => {
+    if (game.status === "live" && initialGame.status === "waiting") {
+      playSound("game-start");
+    }
+  }, [game.status, initialGame.status]);
+
+  useEffect(() => {
+    if (game.status === "finished") {
+      playSound("game-end");
+    }
+  }, [game.status]);
+
+  const prevFen = useRef(game.fen);
+  useEffect(() => {
+    if (game.fen !== prevFen.current) {
+      const chess = new Chess(game.fen);
+      const history = chess.history({ verbose: true });
+      const last = history[history.length - 1];
+      
+      if (last) {
+        if (last.flags.includes("k") || last.flags.includes("q")) {
+          playSound("castle");
+        } else if (last.flags.includes("c") || last.flags.includes("e")) {
+          playSound("capture");
+        } else {
+          playSound("move-self");
+        }
+      }
+      prevFen.current = game.fen;
+    }
+  }, [game.fen]);
 
   const theme = themes[themeIndex] ?? themes[0];
   const legalMoves = useMemo(() => buildMoveMap(game.fen), [game.fen]);
@@ -191,12 +231,12 @@ export function GameRoom({ initialGame }: Props) {
   }, [game.fen]);
 
   const boardStyles = useMemo(() => {
-    const styles: Record<string, CSSProperties> = {};
+    const styles: Record<string, CSSProperties> = { ...rightClickedSquares };
     
     // Last move highlight
     if (lastMove) {
-      styles[lastMove.from] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
-      styles[lastMove.to] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
+      styles[lastMove.from] = { backgroundColor: "rgba(255, 255, 0, 0.3)" };
+      styles[lastMove.to] = { backgroundColor: "rgba(255, 255, 0, 0.3)" };
     }
 
     // Check highlight
@@ -218,7 +258,7 @@ export function GameRoom({ initialGame }: Props) {
       }
     }
     return styles;
-  }, [lastMove, isCheck, kingSquare, selectedSquare, legalMoves, theme.accent]);
+  }, [lastMove, isCheck, kingSquare, selectedSquare, legalMoves, theme.accent, rightClickedSquares]);
 
   const canJoin = game.status === "waiting" && game.youAre === null;
   const showDrawOffer = game.status === "live" && game.drawOfferedBy && game.drawOfferedBy !== game.youAre;
@@ -274,24 +314,43 @@ export function GameRoom({ initialGame }: Props) {
   };
 
   const submitMove = async (from: string, to: string, promotion?: string) => {
-    setBusy(true);
-    const res = await fetch(`/api/games/${game.code}/move`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, promotion })
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (res.ok) {
-      setGame(data.game);
-      return true;
+    // Optimistic Update
+    const chess = new Chess(game.fen);
+    try {
+      const move = chess.move({ from, to, promotion: promotion as any });
+      if (!move) return false;
+
+      const oldGame = game;
+      setGame((curr) => ({
+        ...curr,
+        fen: chess.fen(),
+        moves: [...curr.moves, move.san],
+        isYourTurn: false,
+        activeColor: chess.turn() === "w" ? "white" : "black"
+      }));
+
+      const res = await fetch(`/api/games/${game.code}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to, promotion })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGame(data.game);
+        return true;
+      }
+      
+      setError(data.error ?? "Invalid move");
+      setGame(oldGame);
+      await refresh();
+      return false;
+    } catch (e) {
+      return false;
     }
-    setError(data.error ?? "Invalid move");
-    await refresh();
-    return false;
   };
 
   const handleSquareClick = (square: string) => {
+    setRightClickedSquares({});
     if (game.status !== "live" || !game.youAre) return;
     
     const sq = square as Square;
@@ -313,8 +372,20 @@ export function GameRoom({ initialGame }: Props) {
     else setSelectedSquare(null);
   };
 
+  const handleSquareRightClick = (square: string) => {
+    setRightClickedSquares((prev) => {
+      const next = { ...prev };
+      if (next[square]) {
+        delete next[square];
+      } else {
+        next[square] = { backgroundColor: "rgba(255, 0, 0, 0.4)" };
+      }
+      return next;
+    });
+  };
+
   const handlePieceDrop = (sourceSquare: string, targetSquare: string | null) => {
-    if (!targetSquare || game.status !== "live" || !game.isYourTurn) return false;
+    if (!targetSquare || game.status !== "live") return false;
     
     const piece = new Chess(game.fen).get(sourceSquare as Square);
     if (piece?.type === "p" && (targetSquare[1] === "1" || targetSquare[1] === "8")) {
@@ -324,8 +395,7 @@ export function GameRoom({ initialGame }: Props) {
       return true;
     }
     
-    void submitMove(sourceSquare, targetSquare);
-    return true;
+    return void submitMove(sourceSquare, targetSquare) as any;
   };
 
   const handleAction = async (endpoint: string, body?: any) => {
@@ -363,6 +433,7 @@ export function GameRoom({ initialGame }: Props) {
                 options={{
                   position: game.fen,
                   onSquareClick: ({ square }) => handleSquareClick(square),
+                  onSquareRightClick: ({ square }) => handleSquareRightClick(square),
                   onPieceDrop: ({ sourceSquare, targetSquare }) => handlePieceDrop(sourceSquare, targetSquare),
                   boardOrientation: boardOrientation,
                   darkSquareStyle: { backgroundColor: theme.dark },
@@ -370,7 +441,7 @@ export function GameRoom({ initialGame }: Props) {
                   squareStyles: boardStyles,
                   boardStyle: { borderRadius: 4, boxShadow: "0 5px 15px rgba(0,0,0,0.5)" },
                   animationDurationInMs: 200,
-                  allowDragging: game.isYourTurn && !busy,
+                  allowDragging: true,
                   pieces: customPieces
                 }}
               />

@@ -89,14 +89,71 @@ async function attachPlayers(game: GameDocument, viewerId: string): Promise<Game
   };
 }
 
+function calculateElo(currentElo: number, opponentElo: number, actualScore: number) {
+  const kFactor = 32;
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentElo - currentElo) / 400));
+  return Math.round(currentElo + kFactor * (actualScore - expectedScore));
+}
+
+async function updatePlayerRatingsAndStats(game: GameDocument, result: GameDocument["result"], resultReason: string) {
+  if (!game.whitePlayerId || !game.blackPlayerId) return;
+
+  const now = new Date().toISOString();
+  const { data: players } = await supabase
+    .from("users")
+    .select("*")
+    .in("clerkId", [game.whitePlayerId, game.blackPlayerId]);
+
+  if (players && players.length === 2) {
+    const white = players.find((p) => p.clerkId === game.whitePlayerId)!;
+    const black = players.find((p) => p.clerkId === game.blackPlayerId)!;
+
+    let whiteScore = 0.5;
+    let blackScore = 0.5;
+    if (result === "white") {
+      whiteScore = 1;
+      blackScore = 0;
+    } else if (result === "black") {
+      whiteScore = 0;
+      blackScore = 1;
+    }
+
+    const newWhiteElo = calculateElo(white.elo, black.elo, whiteScore);
+    const newBlackElo = calculateElo(black.elo, white.elo, blackScore);
+
+    const updatePlayer = async (player: any, score: number, newElo: number) => {
+      const stats = { ...player.stats };
+      if (score === 1) stats.wins++;
+      else if (score === 0) stats.losses++;
+      else stats.draws++;
+
+      await supabase
+        .from("users")
+        .update({
+          elo: newElo,
+          stats,
+          updatedAt: now
+        })
+        .eq("clerkId", player.clerkId);
+    };
+
+    await Promise.all([
+      updatePlayer(white, whiteScore, newWhiteElo),
+      updatePlayer(black, blackScore, newBlackElo)
+    ]);
+  }
+}
+
 async function finalizeGame(game: GameDocument, result: GameDocument["result"], resultReason: string) {
+  if (game.status === "finished") return game;
+
   const now = new Date().toISOString();
   
   const clocks = { ...game.clocks };
   if (result === "white" && resultReason.includes("flagged")) clocks.blackMs = 0;
   if (result === "black" && resultReason.includes("flagged")) clocks.whiteMs = 0;
 
-  const { data, error } = await supabase
+  const { data: updatedGame, error } = await supabase
     .from("games")
     .update({
       status: "finished",
@@ -115,7 +172,9 @@ async function finalizeGame(game: GameDocument, result: GameDocument["result"], 
     return game;
   }
 
-  return data as GameDocument;
+  await updatePlayerRatingsAndStats(updatedGame as GameDocument, result, resultReason);
+
+  return updatedGame as GameDocument;
 }
 
 async function syncTimeoutIfNeeded(game: GameDocument) {
@@ -365,7 +424,12 @@ export async function submitMove(input: {
     throw new Error(`Failed to submit move: ${updateError.message}`);
   }
 
-  return attachPlayers(updated as GameDocument, input.playerId);
+  const updatedGame = updated as GameDocument;
+  if (next.status === "finished") {
+    await updatePlayerRatingsAndStats(updatedGame, next.result as any, next.resultReason as any);
+  }
+
+  return attachPlayers(updatedGame, input.playerId);
 }
 
 export async function offerDraw(input: { code: string; playerId: string }) {
@@ -394,20 +458,7 @@ export async function offerDraw(input: { code: string; playerId: string }) {
   const now = new Date().toISOString();
   
   if (synced.drawAcceptedBy) {
-    const { data: updated } = await supabase
-      .from("games")
-      .update({
-        status: "finished",
-        result: "draw",
-        resultReason: "Draw accepted",
-        lastMoveAt: null,
-        updatedAt: now
-      })
-      .eq("code", input.code)
-      .select()
-      .single();
-      
-    return attachPlayers(updated as GameDocument, input.playerId);
+    return attachPlayers(await finalizeGame(synced, "draw", "Draw accepted"), input.playerId);
   }
 
   const { data: updated } = await supabase
@@ -450,22 +501,7 @@ export async function acceptDraw(input: { code: string; playerId: string }) {
     throw new Error("No draw offer to accept");
   }
 
-  const now = new Date().toISOString();
-  const { data: updated } = await supabase
-    .from("games")
-    .update({
-      status: "finished",
-      result: "draw",
-      resultReason: "Draw accepted",
-      lastMoveAt: null,
-      drawAcceptedBy: playerSide,
-      updatedAt: now
-    })
-    .eq("code", input.code)
-    .select()
-    .single();
-
-  return attachPlayers(updated as GameDocument, input.playerId);
+  return attachPlayers(await finalizeGame(synced, "draw", "Draw accepted"), input.playerId);
 }
 
 export async function resignGame(input: { code: string; playerId: string }) {
@@ -492,22 +528,7 @@ export async function resignGame(input: { code: string; playerId: string }) {
   }
 
   const winner = playerSide === "white" ? "black" : "white";
-  const now = new Date().toISOString();
-  
-  const { data: updated } = await supabase
-    .from("games")
-    .update({
-      status: "finished",
-      result: winner,
-      resultReason: "Resignation",
-      lastMoveAt: null,
-      updatedAt: now
-    })
-    .eq("code", input.code)
-    .select()
-    .single();
-
-  return attachPlayers(updated as GameDocument, input.playerId);
+  return attachPlayers(await finalizeGame(synced, winner, "Resignation"), input.playerId);
 }
 
 export async function listGamesForUser(playerId: string) {
