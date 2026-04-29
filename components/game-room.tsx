@@ -221,6 +221,13 @@ export function GameRoom({ initialGame }: Props) {
   }, [lastMove, isCheck, kingSquare, selectedSquare, legalMoves, theme.accent]);
 
   const canJoin = game.status === "waiting" && game.youAre === null;
+  const showDrawOffer = game.status === "live" && game.drawOfferedBy && game.drawOfferedBy !== game.youAre;
+
+  const statusText = useMemo(() => {
+    if (game.status === "finished") return game.resultReason ?? "Game Over";
+    if (game.status === "waiting") return "Waiting for opponent...";
+    return game.isYourTurn ? "Your turn" : "Opponent thinking...";
+  }, [game.status, game.resultReason, game.isYourTurn]);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("chess-heaven-board-theme");
@@ -364,8 +371,7 @@ export function GameRoom({ initialGame }: Props) {
                   boardStyle: { borderRadius: 4, boxShadow: "0 5px 15px rgba(0,0,0,0.5)" },
                   animationDurationInMs: 200,
                   allowDragging: game.isYourTurn && !busy,
-                  pieces: customPieces,
-                  arePremovesAllowed: true
+                  pieces: customPieces
                 }}
               />
 
