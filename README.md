@@ -30,16 +30,43 @@ Chess Heaven is a modern, minimal online chess platform built with Next.js, Cler
 
 ## Environment
 
-Create a `.env` file with:
+Create a `.env` file with the following variables. You can use `.env.example` as a template.
 
 ```env
-MONGODB_URI=
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+# Database
+MONGODB_URI=mongodb://localhost:27017/chess-heaven
+
+# Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
+
+# App Configuration
+# APP_MODE: "production" (uses localhost) or "deployment" (uses DEPLOYMENT_URL)
+APP_MODE=production
+DEPLOYMENT_URL=https://your-app-url.vercel.app
 ```
 
-Your repository already contains these values.
+## Deployment Guide
+
+Follow these steps to deploy Chess Heaven to a production environment (e.g., Vercel):
+
+### 1. Database Setup
+- Provision a MongoDB cluster (e.g., using MongoDB Atlas).
+- Obtain your connection string and set it as `MONGODB_URI` in your production environment variables.
+
+### 2. Authentication Setup
+- Create a new project in the [Clerk Dashboard](https://dashboard.clerk.com/).
+- Configure your production domain and redirect URLs in the Clerk settings.
+- Copy the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to your production environment.
+
+### 3. Environment Configuration
+- Set `APP_MODE` to `deployment`.
+- Set `DEPLOYMENT_URL` to your live domain (e.g., `https://chess-heaven.vercel.app`).
+- Ensure all Clerk and MongoDB variables are correctly set in your deployment platform's dashboard.
+
+### 4. Build and Deploy
+- If using Vercel, connect your repository and it will automatically detect the Next.js setup.
+- For other platforms, run `npm run build` followed by `npm run start`.
 
 ## Getting Started
 
@@ -109,7 +136,3 @@ npm run build
 npm run start
 npm run typecheck
 ```
-
-## Deployment
-
-Deploy to Vercel or any Node-compatible platform that supports Next.js and environment variables. Configure Clerk keys and MongoDB before going live.
