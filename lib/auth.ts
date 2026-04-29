@@ -23,6 +23,8 @@ export async function requireAppUser() {
     clerkId: userId,
     email,
     username,
+    firstName: user.firstName ?? undefined,
+    lastName: user.lastName ?? undefined,
     imageUrl
   });
 
@@ -31,12 +33,19 @@ export async function requireAppUser() {
   }
 
   return {
-    _id: appUser._id.toString(),
     clerkId: appUser.clerkId,
     email: appUser.email,
     username: appUser.username,
+    firstName: appUser.firstName,
+    lastName: appUser.lastName,
     imageUrl: appUser.imageUrl,
     elo: appUser.elo,
+    stats: appUser.stats || {
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      timeSpentMs: 0
+    },
     createdAt: appUser.createdAt,
     updatedAt: appUser.updatedAt
   };

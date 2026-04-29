@@ -6,6 +6,7 @@ import { FormEvent, useMemo, useState } from "react";
 import type { AppUser, GameView } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
 import { ThemeSettings } from "./theme-settings";
+import { DashboardBoard } from "./dashboard-board";
 
 type Props = {
   user: AppUser;
@@ -22,8 +23,6 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const waitingCount = useMemo(() => games.filter((game) => game.status === "waiting").length, [games]);
 
   async function handleCreateGame(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,98 +60,125 @@ export function DashboardScreen({ user, games: initialGames }: Props) {
     router.push(`/play/${code}`);
   }
 
+  const stats = user.stats || { wins: 0, losses: 0, draws: 0, timeSpentMs: 0 };
+  const timeSpentHours = Math.floor(stats.timeSpentMs / 3600000);
+  const totalGames = stats.wins + stats.losses + stats.draws;
+
   return (
     <div className="dashboard-layout">
       <div className="dashboard-top-row">
-        <div className="card stat-card">
-          <p className="eyebrow">Profile</p>
-          <div className="profile-info">
-            <img src={user.imageUrl} alt="" className="player-avatar" />
-            <div>
+        <div className="card profile-card">
+          <div className="profile-header">
+            <img src={user.imageUrl} alt="" className="profile-avatar-large" />
+            <div className="profile-main-info">
               <h2>{user.username}</h2>
-              <div className="profile-stats">
-                <span>Rating: <strong>{user.elo}</strong></span>
-                <span>Active: <strong>{waitingCount}</strong></span>
-              </div>
+              <p className="profile-name">
+                {user.firstName} {user.lastName}
+              </p>
+            </div>
+          </div>
+          
+          <div className="profile-stats-grid">
+            <div className="stat-item">
+              <span className="stat-label">Rating</span>
+              <span className="stat-value">{user.elo}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Score</span>
+              <span className="stat-value">{stats.wins}W - {stats.losses}L</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Matches</span>
+              <span className="stat-value">{totalGames}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Time</span>
+              <span className="stat-value">{timeSpentHours}h</span>
             </div>
           </div>
         </div>
         <ThemeSettings />
       </div>
 
-      <div className="dashboard-grid">
-        <form className="card form-card" onSubmit={handleCreateGame}>
-          <p className="eyebrow">Create Match</p>
-          
-          <div className="input-group">
-            <label>Your Side</label>
-            <select className="select" value={creatorSide} onChange={(e) => setCreatorSide(e.target.value as any)}>
-              <option value="random">Random</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-            </select>
-          </div>
+      <div className="dashboard-main-grid">
+        <div className="dashboard-board-column">
+          <DashboardBoard />
+        </div>
 
-          <div className="input-row">
+        <div className="dashboard-actions-column">
+          <form className="card form-card" onSubmit={handleCreateGame}>
+            <p className="eyebrow">Create Match</p>
+            
             <div className="input-group">
-              <label>White (min)</label>
-              <input className="input" type="number" min={1} max={180} value={whiteMinutes} onChange={(e) => setWhiteMinutes(Number(e.target.value))} />
+              <label>Your Side</label>
+              <select className="select" value={creatorSide} onChange={(e) => setCreatorSide(e.target.value as any)}>
+                <option value="random">Random</option>
+                <option value="white">White</option>
+                <option value="black">Black</option>
+              </select>
             </div>
+
+            <div className="input-row" style={{ display: "flex", gap: 12 }}>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>White (min)</label>
+                <input className="input" type="number" min={1} max={180} value={whiteMinutes} onChange={(e) => setWhiteMinutes(Number(e.target.value))} />
+              </div>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>Black (min)</label>
+                <input className="input" type="number" min={1} max={180} value={blackMinutes} onChange={(e) => setBlackMinutes(Number(e.target.value))} />
+              </div>
+            </div>
+
             <div className="input-group">
-              <label>Black (min)</label>
-              <input className="input" type="number" min={1} max={180} value={blackMinutes} onChange={(e) => setBlackMinutes(Number(e.target.value))} />
+              <label>Increment (sec)</label>
+              <input className="input" type="number" min={0} max={60} value={incrementSeconds} onChange={(e) => setIncrementSeconds(Number(e.target.value))} />
             </div>
-          </div>
 
-          <div className="input-group">
-            <label>Increment (sec)</label>
-            <input className="input" type="number" min={0} max={60} value={incrementSeconds} onChange={(e) => setIncrementSeconds(Number(e.target.value))} />
-          </div>
+            <button className="btn btn-primary full-width" type="submit" disabled={busy} style={{ marginTop: 12 }}>
+              {busy ? "Creating..." : "Create Game"}
+            </button>
+          </form>
 
-          <button className="btn btn-primary full-width" type="submit" disabled={busy}>
-            {busy ? "Creating..." : "Create Game"}
-          </button>
-        </form>
+          <form className="card form-card" onSubmit={handleJoinGame}>
+            <p className="eyebrow">Join Match</p>
+            <div className="input-group">
+              <label>Invite Code</label>
+              <input 
+                className="input code-input" 
+                placeholder="ABCD1234" 
+                value={joinCode} 
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              />
+            </div>
+            <button className="btn btn-secondary full-width" type="submit" disabled={busy} style={{ marginTop: 12 }}>
+              Join Game
+            </button>
+            {error && <div className="error-toast" style={{ marginTop: 12 }}>{error}</div>}
+          </form>
+        </div>
+      </div>
 
-        <form className="card form-card" onSubmit={handleJoinGame}>
-          <p className="eyebrow">Join Match</p>
-          <div className="input-group">
-            <label>Invite Code</label>
-            <input 
-              className="input code-input" 
-              placeholder="ABCD1234" 
-              value={joinCode} 
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            />
-          </div>
-          <button className="btn btn-secondary full-width" type="submit" disabled={busy}>
-            Join Game
-          </button>
-          {error && <div className="error-toast">{error}</div>}
-        </form>
-
-        <div className="card recent-games-card">
-          <p className="eyebrow">Recent Activity</p>
-          <div className="games-list">
-            {games.length === 0 ? (
-              <p className="empty-text">No games yet</p>
-            ) : (
-              games.map((game) => (
-                <Link key={game.code} href={`/play/${game.code}`} className="game-item">
-                  <div className="game-item-header">
-                    <span className="game-code">{game.code}</span>
-                    <span className={cn("game-status-tag", game.status)}>{game.status}</span>
-                  </div>
-                  <div className="game-players">
-                    {game.whitePlayer?.username ?? "???"} vs {game.blackPlayer?.username ?? "???"}
-                  </div>
-                  <div className="game-meta">
-                    {game.timeControl.whiteMs / 60000}m + {game.timeControl.incrementMs / 1000}s · {formatDate(game.updatedAt)}
-                  </div>
-                </Link>
-              ))
-            )}
-          </div>
+      <div className="card recent-games-card recent-activity-full">
+        <p className="eyebrow">Recent Activity</p>
+        <div className="games-list">
+          {games.length === 0 ? (
+            <p className="empty-text">No games yet</p>
+          ) : (
+            games.map((game) => (
+              <Link key={game.code} href={`/play/${game.code}`} className="game-item">
+                <div className="game-item-header">
+                  <span className="game-code">{game.code}</span>
+                  <span className={cn("game-status-tag", game.status)}>{game.status}</span>
+                </div>
+                <div className="game-players">
+                  {game.whitePlayer?.username ?? "???"} vs {game.blackPlayer?.username ?? "???"}
+                </div>
+                <div className="game-meta">
+                  {game.timeControl.whiteMs / 60000}m + {game.timeControl.incrementMs / 1000}s · {formatDate(game.updatedAt)}
+                </div>
+              </Link>
+            ))
+          )}
         </div>
       </div>
     </div>

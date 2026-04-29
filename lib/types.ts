@@ -15,7 +15,10 @@ export type AppThemeName =
   | "sapphire"
   | "emerald"
   | "rose"
-  | "amber";
+  | "amber"
+  | "amethyst"
+  | "gold"
+  | "slate";
 
 export type BoardTheme = {
   name: string;
@@ -28,8 +31,16 @@ export type AppUser = {
   clerkId: string;
   email: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   imageUrl: string;
   elo: number;
+  stats: {
+    wins: number;
+    losses: number;
+    draws: number;
+    timeSpentMs: number;
+  };
   createdAt: string;
   updatedAt: string;
 };

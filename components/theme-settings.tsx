@@ -16,6 +16,9 @@ const appThemes: { name: AppThemeName; label: string; color: string }[] = [
   { name: "emerald", label: "Emerald", color: "#10b981" },
   { name: "rose", label: "Rose", color: "#ec4899" },
   { name: "amber", label: "Amber", color: "#eab308" },
+  { name: "amethyst", label: "Amethyst", color: "#a855f7" },
+  { name: "gold", label: "Gold", color: "#ffd700" },
+  { name: "slate", label: "Slate", color: "#475569" },
 ];
 
 export function ThemeSettings() {

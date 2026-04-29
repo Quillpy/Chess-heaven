@@ -7,17 +7,35 @@ import type { CSSProperties } from "react";
 import type { GameView } from "@/lib/types";
 import { formatClock, cn } from "@/lib/utils";
 
+import { customPieces } from "@/lib/pieces";
+import { useTheme } from "@/components/theme-provider";
+import type { AppThemeName } from "@/lib/types";
+
 const themes = [
-  { name: "Classic", light: "#f3ebe2", dark: "#746253", accent: "#22c55e" },
-  { name: "Blue", light: "#e9f3ff", dark: "#4c6684", accent: "#3b82f6" },
-  { name: "Green", light: "#f7f0d8", dark: "#596a3b", accent: "#84cc16" },
-  { name: "Wood", light: "#deb887", dark: "#8b4513", accent: "#d2691e" },
-  { name: "Neon", light: "#1a1a2e", dark: "#16213e", accent: "#e94560" },
-  { name: "Midnight", light: "#1a1a3c", dark: "#0a0a1f", accent: "#6366f1" },
-  { name: "Ocean", light: "#e0f7fa", dark: "#006994", accent: "#00bcd4" },
-  { name: "Lava", light: "#fffaf0", dark: "#8b0000", accent: "#ff4500" },
-  { name: "Gold", light: "#fffacd", dark: "#8b7500", accent: "#ffd700" }
+  { name: "Midnight Blue", light: "#23244D", dark: "#0D0E2B", accent: "#6366f1" },
+  { name: "Forest Night", light: "#2D4A3E", dark: "#14261F", accent: "#22c55e" },
+  { name: "Royal Purple", light: "#3B2C5A", dark: "#1A102D", accent: "#a855f7" },
+  { name: "Warm Walnut", light: "#6B4F3A", dark: "#3D2A1D", accent: "#f97316" },
+  { name: "Slate Gray", light: "#4B5563", dark: "#1F2937", accent: "#3b82f6" },
+  { name: "Deep Ocean", light: "#1B3A4B", dark: "#0D1F2D", accent: "#06b6d4" },
+  { name: "Espresso", light: "#4B3832", dark: "#2D1B14", accent: "#d2691e" },
+  { name: "Obsidian", light: "#2A2A2A", dark: "#121212", accent: "#e94560" },
+  { name: "Rosewood", light: "#5E2B2B", dark: "#3A1616", accent: "#ef4444" }
 ] as const;
+
+const appThemes: { name: AppThemeName; color: string }[] = [
+  { name: "default", color: "#3b82f6" },
+  { name: "neon", color: "#a855f7" },
+  { name: "ocean", color: "#06b6d4" },
+  { name: "sunset", color: "#f97316" },
+  { name: "forest", color: "#22c55e" },
+  { name: "midnight", color: "#818cf8" },
+  { name: "crimson", color: "#ef4444" },
+  { name: "sapphire", color: "#3b82f6" },
+  { name: "emerald", color: "#10b981" },
+  { name: "rose", color: "#ec4899" },
+  { name: "amber", color: "#eab308" }
+];
 
 const promotionPieces = [
   { type: "q", label: "Queen" },
@@ -152,28 +170,57 @@ export function GameRoom({ initialGame }: Props) {
       : "white"
     : game.youAre ?? "white";
 
-  const canJoin = game.status === "waiting" && game.youAre === null;
-  const showDrawOffer = game.status === "live" && game.drawOfferedBy && game.drawOfferedBy !== game.youAre;
-
-  const statusText = useMemo(() => {
-    if (game.status === "finished") return game.resultReason ?? "Game Over";
-    if (game.status === "waiting") return "Waiting for opponent...";
-    return game.isYourTurn ? "Your turn" : "Opponent thinking...";
-  }, [game.status, game.resultReason, game.isYourTurn]);
+  const { lastMove, isCheck, kingSquare } = useMemo(() => {
+    const chess = new Chess(game.fen);
+    const history = chess.history({ verbose: true });
+    const last = history[history.length - 1];
+    const check = chess.inCheck();
+    let kSq = null;
+    if (check) {
+      const board = chess.board();
+      for (const row of board) {
+        for (const sq of row) {
+          if (sq && sq.type === "k" && sq.color === chess.turn()) {
+            kSq = sq.square;
+            break;
+          }
+        }
+      }
+    }
+    return { lastMove: last, isCheck: check, kingSquare: kSq };
+  }, [game.fen]);
 
   const boardStyles = useMemo(() => {
     const styles: Record<string, CSSProperties> = {};
+    
+    // Last move highlight
+    if (lastMove) {
+      styles[lastMove.from] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
+      styles[lastMove.to] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
+    }
+
+    // Check highlight
+    if (isCheck && kingSquare) {
+      styles[kingSquare] = {
+        background: "radial-gradient(circle, rgba(255,0,0,0.5) 0%, rgba(255,0,0,0.8) 100%)",
+        borderRadius: "50%"
+      };
+    }
+
+    // Selected and Legal moves
     if (selectedSquare) {
-      styles[selectedSquare] = { backgroundColor: `${theme.accent}45` };
+      styles[selectedSquare] = { backgroundColor: "rgba(255, 255, 255, 0.2)" };
       for (const square of legalMoves[selectedSquare] ?? []) {
         styles[square] = { 
-          background: `radial-gradient(circle, ${theme.accent}35 25%, transparent 25%)`,
+          background: `radial-gradient(circle, ${theme.accent}40 25%, transparent 25%)`,
           cursor: "pointer"
         };
       }
     }
     return styles;
-  }, [legalMoves, selectedSquare, theme.accent]);
+  }, [lastMove, isCheck, kingSquare, selectedSquare, legalMoves, theme.accent]);
+
+  const canJoin = game.status === "waiting" && game.youAre === null;
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("chess-heaven-board-theme");
@@ -287,6 +334,8 @@ export function GameRoom({ initialGame }: Props) {
     else setError(data.error ?? "Action failed");
   };
 
+  const { theme: appTheme, setTheme: setAppTheme } = useTheme();
+
   return (
     <div className="shell">
       <div className="game-container">
@@ -312,25 +361,31 @@ export function GameRoom({ initialGame }: Props) {
                   darkSquareStyle: { backgroundColor: theme.dark },
                   lightSquareStyle: { backgroundColor: theme.light },
                   squareStyles: boardStyles,
-                  boardStyle: { borderRadius: 8 },
+                  boardStyle: { borderRadius: 4, boxShadow: "0 5px 15px rgba(0,0,0,0.5)" },
                   animationDurationInMs: 200,
-                  allowDragging: game.isYourTurn && !busy
+                  allowDragging: game.isYourTurn && !busy,
+                  pieces: customPieces,
+                  arePremovesAllowed: true
                 }}
               />
 
               {showPromotion && (
                 <div className="promotion-modal">
                   <div className="promotion-options">
-                    {promotionPieces.map((p) => (
-                      <button key={p.type} className="promotion-btn" onClick={() => {
-                        void submitMove(selectedSquare!, promotionSquare!, p.type);
-                        setShowPromotion(false);
-                        setSelectedSquare(null);
-                        setPromotionSquare(null);
-                      }}>
-                        {p.type.toUpperCase()}
-                      </button>
-                    ))}
+                    {promotionPieces.map((p) => {
+                      const colorPrefix = game.activeColor === "white" ? "w" : "b";
+                      const pieceKey = `${colorPrefix}${p.type.toUpperCase()}`;
+                      return (
+                        <button key={p.type} className="promotion-btn" onClick={() => {
+                          void submitMove(selectedSquare!, promotionSquare!, p.type);
+                          setShowPromotion(false);
+                          setSelectedSquare(null);
+                          setPromotionSquare(null);
+                        }}>
+                          {customPieces[pieceKey]({ svgStyle: { width: 40, height: 40 } })}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -418,7 +473,21 @@ export function GameRoom({ initialGame }: Props) {
                   />
                 ))}
              </div>
-             <button className="btn btn-secondary full-width" style={{ marginTop: 12 }} onClick={() => setFlipped(!flipped)}>
+
+             <p className="eyebrow" style={{ margin: "20px 0 12px" }}>App Theme</p>
+             <div className="theme-selector">
+                {appThemes.map((t) => (
+                  <button
+                    key={t.name}
+                    className={cn("theme-dot", appTheme === t.name && "active")}
+                    style={{ background: t.color }}
+                    onClick={() => setAppTheme(t.name)}
+                    title={t.name.charAt(0).toUpperCase() + t.name.slice(1)}
+                  />
+                ))}
+             </div>
+
+             <button className="btn btn-secondary full-width" style={{ marginTop: 20 }} onClick={() => setFlipped(!flipped)}>
                Rotate Board
              </button>
           </div>

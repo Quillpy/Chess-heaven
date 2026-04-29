@@ -5,6 +5,8 @@ export async function ensureUser(input: {
   clerkId: string;
   email: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   imageUrl: string;
 }) {
   const db = await getDb();
@@ -14,11 +16,19 @@ export async function ensureUser(input: {
     {
       $setOnInsert: {
         elo: 1200,
+        stats: {
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          timeSpentMs: 0
+        },
         createdAt: now
       },
       $set: {
         email: input.email,
         username: input.username,
+        firstName: input.firstName,
+        lastName: input.lastName,
         imageUrl: input.imageUrl,
         updatedAt: now
       }

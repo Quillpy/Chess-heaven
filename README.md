@@ -1,138 +1,87 @@
 # Chess Heaven
 
-Chess Heaven is a modern, minimal online chess platform built with Next.js, Clerk, MongoDB, `chess.js`, and `react-chessboard`. It focuses on private code-based matches, elegant UI, fast interactions, custom time controls, time odds, and local board customization.
+Chess Heaven is a modern, minimal, and distraction-free online chess platform designed for private matches. Built with performance and aesthetics in mind, it offers a "zen-like" environment for competitive play without the bloat of traditional chess sites.
 
-## Features
+## 🚀 Project Overview
 
-- Clerk authentication with account creation and login
-- Automatic player provisioning with a starting Elo of `1200`
-- Private room creation with invite codes
-- Custom side selection: `white`, `black`, or `random`
-- Custom time controls with independent white and black clocks
-- Increment support
-- Time odds support by setting different white and black clocks
-- Legal move validation through `chess.js`
-- FEN and PGN generation
-- Live multiplayer flow through polling
-- Game status handling for waiting, live, checkmate, draw, and flag fall
-- Board theme and orientation customization stored in local storage
-- Clean landing page, dashboard, and play room UX
+Chess Heaven focuses on the core chess experience. It allows players to create private rooms instantly, share a link with an opponent, and play with custom time controls and curated visual themes.
 
-## Stack
+### How it Works
+- **Frontend**: Next.js 15 (App Router) with React 19 and Tailwind-free custom CSS.
+- **Backend**: Serverless API routes using MongoDB for persistence.
+- **Real-time**: Synchronized state via Server-Sent Events (SSE) for low-latency updates.
+- **Authentication**: Secure account management powered by Clerk.
+- **Rules & Validation**: Move verification handled by `chess.js`.
 
-- Next.js 15 App Router
-- React 19
-- TypeScript
-- Clerk
-- MongoDB native driver
-- `chess.js`
-- `react-chessboard`
+### Key Features
+- **Instant Matchmaking**: Create a room, copy the link, and you're ready.
+- **Curated Themes**: Choose from 9+ board palettes and 14+ app appearance schemes.
+- **Custom Time Controls**: Support for time odds (different base times for each side) and increments.
+- **Responsive Design**: Play seamlessly on desktop or mobile browsers.
+- **Live Replay**: A dashboard feature showcasing immortal games to sharpen your skills.
 
-## Environment
+## 🛠 Running Locally
 
-Create a `.env` file with the following variables. You can use `.env.example` as a template.
+### Prerequisites
+- Node.js 20+ and npm
+- A MongoDB instance (local or Atlas)
+- A Clerk account for authentication
 
-```env
-# Database
-MONGODB_URI=mongodb://localhost:27017/chess-heaven
+### Setup
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/chess-heaven.git
+   cd chess-heaven
+   ```
 
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-# App Configuration
-# APP_MODE: "production" (uses localhost) or "deployment" (uses DEPLOYMENT_URL)
-APP_MODE=production
-DEPLOYMENT_URL=https://your-app-url.vercel.app
-```
+3. **Configure Environment Variables**:
+   Create a `.env.local` file in the root directory:
+   ```env
+   # Clerk
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_pub_key
+   CLERK_SECRET_KEY=your_secret_key
+   NEXT_PUBLIC_CLERK_SIGN_IN_URL=/
+   NEXT_PUBLIC_CLERK_SIGN_UP_URL=/
 
-## Deployment Guide
+   # Database
+   MONGODB_URI=your_mongodb_connection_string
+   ```
 
-Follow these steps to deploy Chess Heaven to a production environment (e.g., Vercel):
+4. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 1. Database Setup
-- Provision a MongoDB cluster (e.g., using MongoDB Atlas).
-- Obtain your connection string and set it as `MONGODB_URI` in your production environment variables.
+## 🌐 Deployment Guide
 
-### 2. Authentication Setup
-- Create a new project in the [Clerk Dashboard](https://dashboard.clerk.com/).
-- Configure your production domain and redirect URLs in the Clerk settings.
-- Copy the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to your production environment.
+### Frontend: Vercel
+1. Push your code to a GitHub repository.
+2. Import the project into [Vercel](https://vercel.com).
+3. Add all environment variables from your `.env.local` to the Vercel project settings.
+4. Deploy.
 
-### 3. Environment Configuration
-- Set `APP_MODE` to `deployment`.
-- Set `DEPLOYMENT_URL` to your live domain (e.g., `https://chess-heaven.vercel.app`).
-- Ensure all Clerk and MongoDB variables are correctly set in your deployment platform's dashboard.
+### Backend/Database: Railway
+1. Sign in to [Railway](https://railway.app).
+2. Create a new "Provision MongoDB" service.
+3. Copy the **Mongo Connection String** and use it as your `MONGODB_URI` in Vercel.
+4. (Optional) If you want to host the Next.js app on Railway instead, connect your GitHub repo and Railway will automatically detect the Next.js setup.
 
-### 4. Build and Deploy
-- If using Vercel, connect your repository and it will automatically detect the Next.js setup.
-- For other platforms, run `npm run build` followed by `npm run start`.
+## 🤝 Contributing
 
-## Getting Started
+We welcome contributions from everyone! To contribute:
+1. Fork the repository.
+2. Create a new branch for your feature or bugfix.
+3. Commit your changes with clear, descriptive messages.
+4. Push to your fork and submit a **Pull Request**.
 
-Install dependencies:
+Any PR, no matter how small, is greatly appreciated!
 
-```bash
-npm install
-```
+## 📜 License
 
-Run the app:
-
-```bash
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-## How It Works
-
-1. A user signs up or logs in through Clerk.
-2. The app provisions a MongoDB-backed profile with a starting Elo of `1200`.
-3. From the dashboard, the player creates a game with:
-   - side preference
-   - white clock
-   - black clock
-   - increment
-4. The app returns a short invite code.
-5. The opponent joins with that code.
-6. When both players are present, the room switches from `waiting` to `live`.
-7. Moves are validated with `chess.js`, persisted in MongoDB, and reflected in the UI.
-8. Clocks update based on active turn timing and increment rules.
-9. The board state, SAN move list, FEN, PGN, and result metadata stay synchronized across refreshes.
-
-## Project Structure
-
-```text
-app/
-  api/
-  dashboard/
-  play/[code]/
-components/
-  app-header.tsx
-  dashboard-screen.tsx
-  game-room.tsx
-lib/
-  auth.ts
-  env.ts
-  games.ts
-  mongodb.ts
-  types.ts
-  users.ts
-  utils.ts
-middleware.ts
-```
-
-## Notes
-
-- The current live update model uses lightweight polling for reliability and simplicity.
-- Time odds are implemented by allowing different initial white and black clock values.
-- Board customization is client-side and local to each player.
-
-## Scripts
-
-```bash
-npm run dev
-npm run build
-npm run start
-npm run typecheck
-```
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
