@@ -8,7 +8,7 @@ Chess Heaven is a modern, minimal online chess platform focused on private match
 
 - **Primary Stack:** Next.js 15 (App Router), React 19, TypeScript.
 - **Authentication:** Clerk for secure account management.
-- **Database:** MongoDB (native driver) for game state and user profiles.
+- **Database:** Supabase (PostgreSQL) for game state and user profiles.
 - **Chess Engine:** `chess.js` for rules and validation.
 - **UI:** `react-chessboard` for the board, styled with a custom high-performance "Heaven" CSS system.
 

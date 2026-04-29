@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/mongodb";
+import { supabase } from "@/lib/supabase";
 import type { AppUser } from "@/lib/types";
 
 export async function ensureUser(input: {
@@ -9,36 +9,54 @@ export async function ensureUser(input: {
   lastName?: string;
   imageUrl: string;
 }) {
-  const db = await getDb();
   const now = new Date().toISOString();
-  await db.collection<AppUser>("users").updateOne(
-    { clerkId: input.clerkId },
-    {
-      $setOnInsert: {
-        elo: 1200,
-        stats: {
-          wins: 0,
-          losses: 0,
-          draws: 0,
-          timeSpentMs: 0
-        },
-        createdAt: now
+  
+  // First, check if user exists to get their createdAt and elo/stats if we don't want to overwrite
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("*")
+    .eq("clerkId", input.clerkId)
+    .single();
+
+  const { data, error } = await supabase
+    .from("users")
+    .upsert({
+      clerkId: input.clerkId,
+      email: input.email,
+      username: input.username,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      imageUrl: input.imageUrl,
+      updatedAt: now,
+      // If user is new, set defaults. If not, these will be ignored or kept.
+      // Upsert in Supabase (Postgres) usually overwrites unless you're careful.
+      // We'll provide defaults only if it's a new user.
+      elo: existingUser?.elo ?? 1200,
+      stats: existingUser?.stats ?? {
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        timeSpentMs: 0
       },
-      $set: {
-        email: input.email,
-        username: input.username,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        imageUrl: input.imageUrl,
-        updatedAt: now
-      }
-    },
-    { upsert: true }
-  );
-  return db.collection<AppUser>("users").findOne({ clerkId: input.clerkId });
+      createdAt: existingUser?.createdAt ?? now
+    }, { onConflict: 'clerkId' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error ensuring user:", error);
+    return null;
+  }
+
+  return data as AppUser;
 }
 
 export async function getUserByClerkId(clerkId: string) {
-  const db = await getDb();
-  return db.collection<AppUser>("users").findOne({ clerkId });
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .eq("clerkId", clerkId)
+    .single();
+    
+  return data as AppUser | null;
 }

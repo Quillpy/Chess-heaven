@@ -1,10 +1,7 @@
 import { Chess } from "chess.js";
-import { getDb } from "@/lib/mongodb";
+import { supabase } from "@/lib/supabase";
 import type { AppUser, GameDocument, GameView, PublicPlayer, Side } from "@/lib/types";
 import { generateGameCode } from "@/lib/utils";
-
-const usersCollection = "users";
-const gamesCollection = "games";
 
 function cloneGame(game: GameDocument): GameDocument {
   return JSON.parse(JSON.stringify(game)) as GameDocument;
@@ -47,14 +44,15 @@ function hasTimedOut(game: GameDocument, nowMs: number) {
 }
 
 async function attachPlayers(game: GameDocument, viewerId: string): Promise<GameView> {
-  const db = await getDb();
   const ids = [game.whitePlayerId, game.blackPlayerId].filter(Boolean) as string[];
-  const players = await db
-    .collection<AppUser>(usersCollection)
-    .find({ clerkId: { $in: ids } })
-    .toArray();
+  
+  const { data: players } = await supabase
+    .from("users")
+    .select("clerkId, username, imageUrl, elo")
+    .in("clerkId", ids);
+
   const playerMap = new Map<string, PublicPlayer>(
-    players.map((player) => [
+    (players || []).map((player: any) => [
       player.clerkId,
       {
         clerkId: player.clerkId,
@@ -64,6 +62,7 @@ async function attachPlayers(game: GameDocument, viewerId: string): Promise<Game
       }
     ])
   );
+  
   const youAre = game.whitePlayerId === viewerId ? "white" : game.blackPlayerId === viewerId ? "black" : null;
   return {
     code: game.code,
@@ -91,36 +90,32 @@ async function attachPlayers(game: GameDocument, viewerId: string): Promise<Game
 }
 
 async function finalizeGame(game: GameDocument, result: GameDocument["result"], resultReason: string) {
-  const db = await getDb();
   const now = new Date().toISOString();
   
   const clocks = { ...game.clocks };
   if (result === "white" && resultReason.includes("flagged")) clocks.blackMs = 0;
   if (result === "black" && resultReason.includes("flagged")) clocks.whiteMs = 0;
 
-  const finished = {
-    ...game,
-    status: "finished" as const,
-    result,
-    resultReason,
-    clocks,
-    lastMoveAt: null,
-    updatedAt: now
-  };
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code: game.code },
-    {
-      $set: {
-        status: finished.status,
-        result: finished.result,
-        resultReason: finished.resultReason,
-        clocks: finished.clocks,
-        lastMoveAt: finished.lastMoveAt,
-        updatedAt: finished.updatedAt
-      }
-    }
-  );
-  return finished;
+  const { data, error } = await supabase
+    .from("games")
+    .update({
+      status: "finished",
+      result,
+      resultReason,
+      clocks,
+      lastMoveAt: null,
+      updatedAt: now
+    })
+    .eq("code", game.code)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error finalizing game:", error);
+    return game;
+  }
+
+  return data as GameDocument;
 }
 
 async function syncTimeoutIfNeeded(game: GameDocument) {
@@ -143,14 +138,14 @@ export async function createGame(input: {
   blackMinutes: number;
   incrementSeconds: number;
 }) {
-  const db = await getDb();
   const code = generateGameCode();
   const creatorColor =
     input.creatorSide === "random" ? (Math.random() > 0.5 ? "white" : "black") : input.creatorSide;
   const now = new Date().toISOString();
   const whitePlayerId = creatorColor === "white" ? input.creatorId : null;
   const blackPlayerId = creatorColor === "black" ? input.creatorId : null;
-  const game: GameDocument = {
+  
+  const game: Partial<GameDocument> = {
     code,
     status: "waiting",
     result: null,
@@ -178,20 +173,33 @@ export async function createGame(input: {
     createdAt: now,
     updatedAt: now
   };
-  await db.collection<GameDocument>(gamesCollection).insertOne(game);
-  return game;
+
+  const { data, error } = await supabase
+    .from("games")
+    .insert(game)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create game: ${error.message}`);
+  }
+
+  return data as GameDocument;
 }
 
 export async function joinGame(code: string, playerId: string) {
-  const db = await getDb();
-  const existing = await db.collection<GameDocument>(gamesCollection).findOne({ code });
+  const { data: existing, error: fetchError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", code)
+    .single();
 
-  if (!existing) {
+  if (fetchError || !existing) {
     throw new Error("Game not found");
   }
 
   if (existing.whitePlayerId === playerId || existing.blackPlayerId === playerId) {
-    return existing;
+    return existing as GameDocument;
   }
 
   if (existing.status !== "waiting") {
@@ -202,46 +210,42 @@ export async function joinGame(code: string, playerId: string) {
   const whitePlayerId = existing.whitePlayerId ?? playerId;
   const blackPlayerId = existing.blackPlayerId ?? playerId;
 
-  const next: GameDocument = {
-    ...existing,
-    whitePlayerId,
-    blackPlayerId,
-    status: "live",
-    lastMoveAt: now,
-    drawOfferedBy: null,
-    drawAcceptedBy: null,
-    halfMoveClock: 0,
-    updatedAt: now
-  };
+  const { data, error } = await supabase
+    .from("games")
+    .update({
+      whitePlayerId,
+      blackPlayerId,
+      status: "live",
+      lastMoveAt: now,
+      drawOfferedBy: null,
+      drawAcceptedBy: null,
+      halfMoveClock: 0,
+      updatedAt: now
+    })
+    .eq("code", code)
+    .eq("status", "waiting")
+    .select()
+    .single();
 
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code, status: "waiting" },
-    {
-      $set: {
-        whitePlayerId,
-        blackPlayerId,
-        status: "live",
-        lastMoveAt: now,
-        drawOfferedBy: null,
-        drawAcceptedBy: null,
-        halfMoveClock: 0,
-        updatedAt: now
-      }
-    }
-  );
+  if (error) {
+    throw new Error(`Failed to join game: ${error.message}`);
+  }
 
-  return next;
+  return data as GameDocument;
 }
 
 export async function getGameForViewer(code: string, viewerId: string) {
-  const db = await getDb();
-  const existing = await db.collection<GameDocument>(gamesCollection).findOne({ code });
+  const { data: existing, error } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", code)
+    .single();
 
-  if (!existing) {
+  if (error || !existing) {
     return null;
   }
 
-  const synced = await syncTimeoutIfNeeded(existing);
+  const synced = await syncTimeoutIfNeeded(existing as GameDocument);
   return attachPlayers(synced, viewerId);
 }
 
@@ -252,14 +256,17 @@ export async function submitMove(input: {
   to: string;
   promotion?: string;
 }) {
-  const db = await getDb();
-  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+  const { data: game, error: fetchError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", input.code)
+    .single();
 
-  if (!game) {
+  if (fetchError || !game) {
     throw new Error("Game not found");
   }
 
-  const synced = await syncTimeoutIfNeeded(game);
+  const synced = await syncTimeoutIfNeeded(game as GameDocument);
 
   if (synced.status !== "live") {
     throw new Error("Game is not live");
@@ -308,8 +315,7 @@ export async function submitMove(input: {
   const isPawnMove = move.piece === "p";
   const newHalfMoveClock = isCapture || isPawnMove ? 0 : synced.halfMoveClock + 1;
 
-  let next: GameDocument = {
-    ...synced,
+  let next: Partial<GameDocument> = {
     fen: chess.fen(),
     pgn: chess.pgn(),
     moves: [...synced.moves, move.san],
@@ -348,39 +354,32 @@ export async function submitMove(input: {
     };
   }
 
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code: input.code },
-    {
-      $set: {
-        fen: next.fen,
-        pgn: next.pgn,
-        moves: next.moves,
-        clocks: next.clocks,
-        activeColor: next.activeColor,
-        status: next.status,
-        result: next.result,
-        resultReason: next.resultReason,
-        lastMoveAt: next.lastMoveAt,
-        drawOfferedBy: next.drawOfferedBy,
-        drawAcceptedBy: next.drawAcceptedBy,
-        halfMoveClock: next.halfMoveClock,
-        updatedAt: next.updatedAt
-      }
-    }
-  );
+  const { data: updated, error: updateError } = await supabase
+    .from("games")
+    .update(next)
+    .eq("code", input.code)
+    .select()
+    .single();
 
-  return attachPlayers(next, input.playerId);
+  if (updateError) {
+    throw new Error(`Failed to submit move: ${updateError.message}`);
+  }
+
+  return attachPlayers(updated as GameDocument, input.playerId);
 }
 
 export async function offerDraw(input: { code: string; playerId: string }) {
-  const db = await getDb();
-  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+  const { data: game, error: fetchError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", input.code)
+    .single();
 
-  if (!game) {
+  if (fetchError || !game) {
     throw new Error("Game not found");
   }
 
-  const synced = await syncTimeoutIfNeeded(game);
+  const synced = await syncTimeoutIfNeeded(game as GameDocument);
 
   if (synced.status !== "live") {
     throw new Error("Game is not live");
@@ -392,46 +391,50 @@ export async function offerDraw(input: { code: string; playerId: string }) {
     throw new Error("You are not part of this game");
   }
 
+  const now = new Date().toISOString();
+  
   if (synced.drawAcceptedBy) {
-    const now = new Date().toISOString();
-    await db.collection<GameDocument>(gamesCollection).updateOne(
-      { code: input.code },
-      {
-        $set: {
-          status: "finished",
-          result: "draw",
-          resultReason: "Draw accepted",
-          lastMoveAt: null,
-          updatedAt: now
-        }
-      }
-    );
-    return attachPlayers({ ...synced, status: "finished", result: "draw", resultReason: "Draw accepted", lastMoveAt: null, updatedAt: now }, input.playerId);
+    const { data: updated } = await supabase
+      .from("games")
+      .update({
+        status: "finished",
+        result: "draw",
+        resultReason: "Draw accepted",
+        lastMoveAt: null,
+        updatedAt: now
+      })
+      .eq("code", input.code)
+      .select()
+      .single();
+      
+    return attachPlayers(updated as GameDocument, input.playerId);
   }
 
-  const now = new Date().toISOString();
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code: input.code },
-    {
-      $set: {
-        drawOfferedBy: playerSide,
-        updatedAt: now
-      }
-    }
-  );
+  const { data: updated } = await supabase
+    .from("games")
+    .update({
+      drawOfferedBy: playerSide,
+      updatedAt: now
+    })
+    .eq("code", input.code)
+    .select()
+    .single();
 
-  return attachPlayers({ ...synced, drawOfferedBy: playerSide, updatedAt: now }, input.playerId);
+  return attachPlayers(updated as GameDocument, input.playerId);
 }
 
 export async function acceptDraw(input: { code: string; playerId: string }) {
-  const db = await getDb();
-  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+  const { data: game, error: fetchError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", input.code)
+    .single();
 
-  if (!game) {
+  if (fetchError || !game) {
     throw new Error("Game not found");
   }
 
-  const synced = await syncTimeoutIfNeeded(game);
+  const synced = await syncTimeoutIfNeeded(game as GameDocument);
 
   if (synced.status !== "live") {
     throw new Error("Game is not live");
@@ -448,32 +451,35 @@ export async function acceptDraw(input: { code: string; playerId: string }) {
   }
 
   const now = new Date().toISOString();
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code: input.code },
-    {
-      $set: {
-        status: "finished",
-        result: "draw",
-        resultReason: "Draw accepted",
-        lastMoveAt: null,
-        drawAcceptedBy: playerSide,
-        updatedAt: now
-      }
-    }
-  );
+  const { data: updated } = await supabase
+    .from("games")
+    .update({
+      status: "finished",
+      result: "draw",
+      resultReason: "Draw accepted",
+      lastMoveAt: null,
+      drawAcceptedBy: playerSide,
+      updatedAt: now
+    })
+    .eq("code", input.code)
+    .select()
+    .single();
 
-  return attachPlayers({ ...synced, status: "finished", result: "draw", resultReason: "Draw accepted", lastMoveAt: null, drawAcceptedBy: playerSide, updatedAt: now }, input.playerId);
+  return attachPlayers(updated as GameDocument, input.playerId);
 }
 
 export async function resignGame(input: { code: string; playerId: string }) {
-  const db = await getDb();
-  const game = await db.collection<GameDocument>(gamesCollection).findOne({ code: input.code });
+  const { data: game, error: fetchError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("code", input.code)
+    .single();
 
-  if (!game) {
+  if (fetchError || !game) {
     throw new Error("Game not found");
   }
 
-  const synced = await syncTimeoutIfNeeded(game);
+  const synced = await syncTimeoutIfNeeded(game as GameDocument);
 
   if (synced.status !== "live") {
     throw new Error("Game is not live");
@@ -487,32 +493,32 @@ export async function resignGame(input: { code: string; playerId: string }) {
 
   const winner = playerSide === "white" ? "black" : "white";
   const now = new Date().toISOString();
-  await db.collection<GameDocument>(gamesCollection).updateOne(
-    { code: input.code },
-    {
-      $set: {
-        status: "finished",
-        result: winner,
-        resultReason: "Resignation",
-        lastMoveAt: null,
-        updatedAt: now
-      }
-    }
-  );
+  
+  const { data: updated } = await supabase
+    .from("games")
+    .update({
+      status: "finished",
+      result: winner,
+      resultReason: "Resignation",
+      lastMoveAt: null,
+      updatedAt: now
+    })
+    .eq("code", input.code)
+    .select()
+    .single();
 
-  return attachPlayers({ ...synced, status: "finished", result: winner, resultReason: "Resignation", lastMoveAt: null, updatedAt: now }, input.playerId);
+  return attachPlayers(updated as GameDocument, input.playerId);
 }
 
 export async function listGamesForUser(playerId: string) {
-  const db = await getDb();
-  const games = await db
-    .collection<GameDocument>(gamesCollection)
-    .find({
-      $or: [{ whitePlayerId: playerId }, { blackPlayerId: playerId }, { creatorId: playerId }]
-    })
-    .sort({ updatedAt: -1 })
-    .limit(12)
-    .toArray();
+  const { data: games } = await supabase
+    .from("games")
+    .select("*")
+    .or(`whitePlayerId.eq.${playerId},blackPlayerId.eq.${playerId},creatorId.eq.${playerId}`)
+    .order("updatedAt", { ascending: false })
+    .limit(12);
 
-  return Promise.all(games.map((game) => attachPlayers(game, playerId)));
+  if (!games) return [];
+
+  return Promise.all(games.map((game) => attachPlayers(game as GameDocument, playerId)));
 }
