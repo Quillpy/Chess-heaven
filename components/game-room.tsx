@@ -441,7 +441,7 @@ export function GameRoom({ initialGame }: Props) {
                   squareStyles: boardStyles,
                   boardStyle: { borderRadius: 4, boxShadow: "0 5px 15px rgba(0,0,0,0.5)" },
                   animationDurationInMs: 200,
-                  allowDragging: true,
+                  allowDragging: game.isYourTurn && !busy,
                   pieces: customPieces
                 }}
               />
